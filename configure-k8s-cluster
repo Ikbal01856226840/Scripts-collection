@@ -1,0 +1,106 @@
+## First of all, prepare 3 VM’s with ubuntu latest LTS version. I am using ubuntu 20.04 LTS. Setup the VMs 
+with suitable ip address which can be remembered,
+
+parvaze@parvaze:~$ cd /etc/netplan/
+parvaze@parvaze:/etc/netplan$ vim 00-installer-config.yaml
+###################################################################
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    eth0:
+      dhcp4: false
+      addresses: [192.168.43.90/24]
+      gateway4: 192.168.43.1
+      nameservers:
+              addresses: [8.8.8.8]
+  version: 2
+#####################################################################
+
+## The new IP address will be applied.
+parvaze@parvaze:/etc/netplan$ netplan try
+parvaze@parvaze:/etc/netplan$ netplan apply
+
+parvaze@parvaze:/etc/netplan$ sudo apt-get update
+
+##Then set the hostname according to your preference, I will be using one master and two slave nodes.
+
+parvaze@parvaze:/etc/netplan$ hostnamectl set-hostname master
+
+root@master:~# vim /etc/hosts
+192.168.43.90 master
+192.168.43.91 k-node1
+192.168.43.92 k-node2
+
+## Update the apt package index and install packages needed to use the Kubernetes apt repository
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+
+cd /etc/apt/
+## create the keyrings directory inside /etc/apt/ to store the key
+sudo mkdir keyrings
+
+## Download the public signing key for the Kubernetes package repositories. The same signing key is used for all repositories so you can disregard the version in the URL
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+## To update to the latest version
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+## To check for for the Kubernetes repository
+cat /etc/apt/sources.list
+
+## We need to install Docker or any CRI (Container Runtime Interface) before installing Kubernetes
+sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
+sudo apt update
+sudo apt install docker-ce -y
+systemctl enable docker
+systemctl start docker
+systemctl status docker
+
+## Turn the swap off
+root@master:~# vim /etc/fstab
+## add # to the swap line 
+
+## After that Paste all these commands.
+
+cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+br_netfilter
+EOF
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sudo sysctl --system
+
+## Now, reboot the machines. After rebooting and installing Kubernetes, #install kubeadm, kubelet and kubectl
+
+sudo apt-get install kubeadm kubelet kubectl -y
+rm /etc/containerd/config.toml
+systemctl restart containerd
+
+## You need to do the following steps on the other machines as well. So, do the exact same thing till 
+installing kubeadm,kubelet and kubectl on all the machines (Master, slave1 and slave2)
+
+## Only Master Node
+
+parvaze@master:~$ sudo kubeadm init
+
+## Your Kubernetes control-plane has initialized successfully!
+## To start using your cluster, you need to run the following as a regular user:
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+## To get the nodes running
+parvaze@master:~$ kubectl get nodes
+
+## To show available pods
+kubectl get pods -A
+
+## To activate core DNS for managing Kubernetes cluster network
+
+
+
+

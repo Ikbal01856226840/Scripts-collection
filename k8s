@@ -1,0 +1,236 @@
+*******************COMMANDS FOR DEMO*******************
+
+sudo su
+apt-get update
+apt-get install apt-transport-https
+
+
+apt install docker.io -y
+docker --version
+systemctl start docker
+systemctl enable docker
+
+sudo curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+
+
+vim /etc/apt/sources.list.d/kubernetes.list
+
+deb http://apt.kubernetes.io/ kubernetes-xenial main
+
+
+apt-get update
+
+apt-get install -y kubelet kubeadm kubectl kubernetes-cni
+
+swapoff -a
+vim /etc/hosts
+192.168.43.90 k-master
+192.168.43.91 k-node1
+192.168.43.92 k-node2
+## Now reboot
+
+BOOTSTRAPPING THE MASTER NODE (IN MASTER)
+
+kubeadm init
+ 
+
+COPY THE COMMAND TO RUN IN MASTER NODES & SAVE IN NOTEPAD
+
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+
+#Configure weavenet CNI plugin:
+---------------------------------
+
+kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+kubectl get pods -n kube-system
+
+CONFIGURE WORKER NODES (IN NODES)
+
+COPY LONG CODE PROVIDED MY MASTER IN NODE NOW LIKE CODE GIVEN BELOW
+
+kubeadm join 192.168.43.90:6443 --token f66pzs.4sl107lvaqjba4j1 \
+        --discovery-token-ca-cert-hash sha256:c95b5720c830a6b9a4702551bbcba4925c392b4dee4af8308d42768971df3a1b
+
+## GO TO MASTER AND RUN THIS COMMAND
+kubectl get nodes
+
+## Create a pod form a yaml file
+vim multicont.yaml
+########################################################
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    app: nginx
+    type: prod
+  name: frontend
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+##############################################################
+kubectl apply -f multicont.yaml
+
+## Check container log # pod name = frontend , container = ubuntuos 
+kubectl logs -f frontend -c ubuntuos
+
+## Check Pod and container IP
+kubectl exec frontend -c ubuntuos -- hostname -i
+
+## GO to container inside # container name = nginx, pod name = frontend
+kubectl exec frontend -it -c nginx -- /bin/bash
+
+## Delete Pod
+kubectl delete pod frontend
+
+## Expose port
+vim multicont.yaml
+##############################################
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+spec:
+  containers:
+    - name: phpapp
+      image: httpd
+      ports:
+        - containerPort: 80
+#################################################
+## Set levels (Declarative Method)
+#############################################
+apiVersion: v1
+kind: Pod
+metadata:
+  name: phpapp-pod
+  labels:
+    env: prod
+    class: pods
+spec:
+  containers:
+    - name: phpapp-cont
+      image: httpd
+      ports:
+        - containerPort: 80
+################################################
+
+## Set Levels (Imperative Methods)
+kubectl label pod phpapp-pod type=pods
+
+## Check levels
+kubectl get pod --show-labels
+
+## Using -l to select exact pods
+kubectl get pod -l env=prod
+
+## if not equal then find other pods
+kubectl get pod -l env!=prod
+
+## Set a lavel on nodes
+kubectl label nodes k-node2 name=k-node2
+
+## NODE SELECTOR EXAMPLE
+vim nodeselector.yaml
+###################################################
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nodeselector-pod
+  labels:
+    env: prod
+    class: pods
+spec:
+  containers:
+    - name: nodeselector-cont
+      image: httpd
+      ports:
+        - containerPort: 80
+  nodeSelector:
+    name: k-node2
+#########################################################
+kubectl apply -f nodeselector.yaml
+
+## EXAMPLE OF REPLICATION CONTROLLER
+vim rc.yaml
+#####################################################
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: aci-frontend
+spec:
+  replicas: 4
+  selector:
+    name: aci
+  template:
+    metadata:
+      name: aci-pod
+      labels:
+        name: aci
+    spec:
+      containers:
+        - name: aci-cont
+          image: httpd
+########################################################
+kubectl apply -f rc.yaml
+kubectl describe rc aci-frontend
+kubectl get pod --show-labels
+
+## For Scaleup 
+kubectl scale --replicas=10 rc -l name=aci
+kubectl get rc
+kubectl get pod --show-labels
+
+## Go inside any container
+kubectl exec networktest -it -c networktest-cont1 -- /bin/bash
+
+## Deployment file
+vim deployment.yaml
+########################################
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+   name: mydeployments
+spec:
+   replicas: 1
+   selector:
+    matchLabels:
+     name: deployment
+   template:
+     metadata:
+       name: testpod1
+       labels:
+         name: deployment
+     spec:
+      containers:
+        - name: c00
+          image: httpd
+          ports:
+          - containerPort: 80
+###############################################
+kubectl apply -f deployment.yaml
+
+## Create a service file
+vim service.yaml
+#################################################
+kind: Service                             # Defines to create Service type Object
+apiVersion: v1
+metadata:
+  name: demoservice
+spec:
+  ports:
+    - port: 80                               # Containers port exposed
+      targetPort: 80                     # Pods port
+  selector:
+    name: deployment                    # Apply this service to any pods which has the specific label
+  type: ClusterIP                       # Specifies the service type i.e ClusterIP or NodePort
+##################################################
+kubectl get svc
+
+**********************END************************************

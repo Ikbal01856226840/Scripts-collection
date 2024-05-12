@@ -1,0 +1,125 @@
+mas@jenkins:~$ sudo apt install ansible -y
+mas@jenkins:~$ cd /etc/ansible/
+mas@jenkins:/etc/ansible$ sudo vim hosts
+############################################
+# Ex 1: Ungrouped hosts, specify before any group headers.
+[app-node]
+192.168.3.113
+
+[dbserver]
+###############################################
+
+mas@jenkins:/etc/ansible$ sudo vim ansible.cfg
+###################################################
+# some basic default values...
+
+inventory      = /etc/ansible/hosts          ###################
+#library        = /usr/share/my_modules/
+#module_utils   = /usr/share/my_module_utils/
+#remote_tmp     = ~/.ansible/tmp
+#local_tmp      = ~/.ansible/tmp
+#plugin_filters_cfg = /etc/ansible/plugin_filters.yml
+#forks          = 5
+#poll_interval  = 15
+sudo_user      = root       ################
+#ask_sudo_pass = True
+#ask_pass      = True
+#transport      = smart
+#remote_port    = 22
+#module_lang    = C
+#module_set_locale = False
+############################################################
+#Host details info
+mas@jenkins:/etc/ansible$ ansible all --list-hosts
+#specific group 
+mas@jenkins:/etc/ansible$ ansible appnode --list-hosts
+#Group first node
+mas@jenkins:/etc/ansible$ ansible appnode[0] --list-hosts
+
+#########Ad-Hoc Commands##############
+mas@jenkins:~$ ansible all -m command -a "ls -a"
+#####Create a new file
+mas@jenkins:~$ ansible all -m command -a "sudo touch /opt/test"
+
+######Install & remove package
+mas@jenkins:~$ ansible all -m command -a "apt install tree -y" -b   # -b means become root
+mas@jenkins:~$ ansible all -m command -a "apt remove tree -y" -b
+
+#####Copy File one location to another
+mas@jenkins:~$ ansible appnode -m copy -a "src=test1 dest=/opt/ remote_src=yes" -b
+mas@jenkins:~$ ansible appnode -m copy -a "src=/home/mas/test1 dest=/opt/ remote_src=yes" -b
+
+#####Install apache2 package
+mas@jenkins:~$ ansible appnode -m apt -a "pkg=apache2 state=present" -b
+mas@jenkins:~$ ansible appnode -m apt -a "pkg=apache2 state=latest" -b  ###For apache2 update version
+mas@jenkins:~$ ansible appnode -m command -a "which apache2"
+mas@jenkins:~$ ansible appnode -m service -a "name=apache2 state=started" -b  ### Start service
+mas@jenkins:~$ ansible appnode -m command -a "systemctl status apache2" -b    ### Check package running or not
+mas@jenkins:~$ ansible appnode -m service -a "name=apache2 state=restarted" -b   ### For restart service
+mas@jenkins:~$ ansible appnode -m service -a "name=apache2 state=stopped" -b    ### Stop service
+mas@jenkins:~$ ansible appnode -m apt -a "pkg=apache2 state=absent" -b  ### Remove package
+
+#### User Create
+mas@jenkins:~$ ansible appnode -m user -a "name=parvaze" -b
+mas@jenkins:~$ ansible appnode -m command -a "tail -2 /etc/passwd" -b
+mas@jenkins:~$ ansible appnode -m user -a "name=parvaze state=absent" -b  ### For remove user
+
+### For remote server all info
+mas@jenkins:~$ ansible appnode -m setup
+
+################################ PlayBoook #######################################################
+mas@jenkins:~$ vim create-user.yml
+###############################################
+---
+- name: Create User Playbook
+  hosts: appnode
+  become: yes
+  tasks:
+  - name: creating user june
+    user:
+      name: july
+
+###########################################
+mas@jenkins:~$ ansible-playbook create-user.yml
+
+mas@jenkins:~$ vim create-file.yml
+#########################################################
+---
+- name: Create a new file
+  hosts: appnode
+  become: true
+  tasks:
+  - name: creating file payment
+    file:
+      path: /opt/payment
+      state: touch
+############################################################
+mas@jenkins:~$ ansible-playbook create-file.yml
+
+mas@jenkins:~$ vim install-package.yml
+###########################################################
+---
+- name: Install Apache2 and MariaDB
+  hosts: appnode
+  become: true
+  tasks:
+  - name: Install Apache2 and MariaDB packages
+    apt:
+      name:
+      - apache2
+      - mariadb-server
+
+  - name: Set MariaDB root password
+    mysql_user:
+      name: root
+      password: "PRG@1qaz"
+      state: present
+
+  - name: Start Apache2 and MariaDB services
+    service:
+      name:
+      - apache2
+      - mariadb
+      state: started
+#############################################################
+mas@jenkins:~$ ansible-playbook install-package.yml

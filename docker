@@ -1,0 +1,17 @@
+#Create a volume (default path /var/lib/docker/volume/)
+docker volume create docker-data
+
+#Container run command
+docker run -it -d -p 8000:8000 --name nodeapp-cont -v docker-data:/app 17433d12557b
+
+#Container Stop and remove 
+docker stop 40a1adaefed8 && docker rm 40a1adaefed8
+
+#Container Access
+docker exec -it 0dd54d8cca38 /bin/bash
+
+#Remove all Stopped Container
+docker rm $(docker ps -a -q)
+
+#After exit containter it automatic delete
+docker run -it --rm image-name
